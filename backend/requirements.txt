@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+websockets
+google-cloud-aiplatform
+python-dotenv
