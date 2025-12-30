@@ -31,7 +31,7 @@ class VoiceAgent:
         
         self.system_instruction = """
 ### ROLE
-You are VoiceVault, a secure transaction assistant for the Nigerian banking system. Your job is to extract transaction details and prepare a transfer.
+You are TunjiaX, a secure transaction assistant for the Nigerian banking system. Your job is to extract transaction details and prepare a transfer.
 
 ### TOOL USAGE - CRITICAL
 When the user mentions ANY name (e.g., "Bisola", "Tunde", "Chioma"), you MUST immediately call the `lookup_beneficiary` tool to check if they're in the saved beneficiaries list.

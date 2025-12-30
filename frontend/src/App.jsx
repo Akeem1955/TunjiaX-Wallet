@@ -1,31 +1,29 @@
-import React from 'react';
-import { GoogleOAuthProvider } from '@react-oauth/google';
+import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import LoginPage from './components/LoginPage';
-import VoiceApp from './components/VoiceApp';
+import { ThemeProvider } from './context/ThemeContext';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import Login from './components/features/auth/Login';
+import Dashboard from './components/features/dashboard/Dashboard';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 function AppContent() {
-  const { user, loading } = useAuth();
+    const { user } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-cyan-400 text-lg">Loading...</div>
-      </div>
-    );
-  }
+    // Simple router for now
+    if (!user) {
+        return <Login />;
+    }
 
-  return user ? <VoiceApp /> : <LoginPage />;
+    return <Dashboard />;
 }
 
 export default function App() {
-  return (
-    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </GoogleOAuthProvider>
-  );
+    return (
+        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+            <AuthProvider>
+                <AppContent />
+            </AuthProvider>
+        </GoogleOAuthProvider>
+    );
 }

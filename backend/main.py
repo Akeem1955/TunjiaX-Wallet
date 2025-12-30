@@ -95,7 +95,145 @@ async def google_auth(request: GoogleAuthRequest):
         }
     except Exception as e:
         print(f"[AUTH] ❌ Authentication failed: {str(e)}", file=sys.stderr)
-        raise HTTPException(status_code=401, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Dashboard API Endpoints
+@app.get("/balance")
+async def get_balance(user_id: int = 1):
+    """Get user account balance"""
+    try:
+        from tools import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT balance_kobo FROM accounts 
+            WHERE user_id = %s AND is_active = TRUE
+            LIMIT 1
+        """, (user_id,))
+        
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not result:
+            return {"balance_kobo": 0, "balance_ngn": "0"}
+        
+        balance_kobo = result[0]
+        balance_ngn = f"{balance_kobo / 100:,.2f}"
+        
+        return {
+            "balance_kobo": balance_kobo,
+            "balance_ngn": balance_ngn
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/fund-wallet")
+async def fund_wallet(user_id: int, amount_kobo: int):
+    """Simulate funding wallet (adds money to account)"""
+    try:
+        from tools import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Update account balance
+        cursor.execute("""
+            UPDATE accounts 
+            SET balance_kobo = balance_kobo + %s 
+            WHERE user_id = %s AND is_active = TRUE
+        """, (amount_kobo, user_id))
+        
+        # Get new balance
+        cursor.execute("""
+            SELECT balance_kobo FROM accounts 
+            WHERE user_id = %s AND is_active = TRUE
+            LIMIT 1
+        """, (user_id,))
+        
+        result = cursor.fetchone()
+        new_balance = result[0] if result else amount_kobo
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {
+            "success": True,
+            "new_balance_kobo": new_balance,
+            "new_balance_ngn": f"{new_balance / 100:,.2f}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/beneficiaries")
+async def get_beneficiaries(user_id: int = 1):
+    """Get user's saved beneficiaries"""
+    try:
+        from tools import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT alias_name, account_name, account_number, bank_name, frequency_count
+            FROM beneficiaries 
+            WHERE user_id = %s
+            ORDER BY frequency_count DESC, alias_name ASC
+        """, (user_id,))
+        
+        beneficiaries = []
+        for row in cursor.fetchall():
+            beneficiaries.append({
+                "alias_name": row[0],
+                "account_name": row[1],
+                "account_number": row[2],
+                "bank_name": row[3],
+                "frequency_count": row[4]
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        return beneficiaries
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/transactions")
+async def get_transactions(user_id: int = 1, limit: int = 20):
+    """Get user's transaction history"""
+    try:
+        from tools import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT transaction_id, type, amount_kobo, counterparty_name, 
+                   counterparty_bank, status, created_at
+            FROM transactions 
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+        """, (user_id, limit))
+        
+        transactions = []
+        for row in cursor.fetchall():
+            transactions.append({
+                "transaction_id": row[0],
+                "type": row[1],
+                "amount_kobo": row[2],
+                "amount_ngn": f"{row[2] / 100:,.2f}",
+                "recipient": row[3],
+                "bank": row[4],
+                "status": row[5],
+                "date": row[6].strftime("%Y-%m-%d %H:%M") if row[6] else ""
+            })
+        
+        cursor.close()
+        conn.close()
+        
+        return transactions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Biometric Face Verification
 class FaceVerificationRequest(BaseModel):

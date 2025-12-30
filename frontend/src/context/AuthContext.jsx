@@ -1,83 +1,83 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { googleLogout } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode';
 
-const AuthContext = createContext(null);
+const AuthContext = createContext();
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+export function useAuth() {
+    return useContext(AuthContext);
+}
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080';
+export function AuthProvider({ children }) {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
 
-  // Check if user is already logged in on mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem('access_token');
-    const storedUser = localStorage.getItem('user');
+    const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
-    if (storedToken && storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error('Failed to parse stored user', e);
-        localStorage.removeItem('access_token');
+    useEffect(() => {
+        // Check for existing session
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            try {
+                setUser(JSON.parse(storedUser));
+            } catch (e) {
+                localStorage.removeItem('user');
+            }
+        }
+        setLoading(false);
+    }, []);
+
+    const loginWithGoogle = async (credential) => {
+        try {
+            const decoded = jwtDecode(credential);
+
+            const res = await fetch(`${backendUrl}/auth/google`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    token: credential,
+                    email: decoded.email,
+                    name: decoded.name,
+                    picture: decoded.picture
+                }),
+            });
+
+            if (!res.ok) {
+                throw new Error('Login failed on server');
+            }
+
+            const data = await res.json();
+            const userData = { ...data, picture: decoded.picture };
+
+            setUser(userData);
+            localStorage.setItem('user', JSON.stringify(userData));
+            setError('');
+        } catch (err) {
+            console.error(err);
+            setError('Failed to login. Please try again.');
+        }
+    };
+
+    const logout = () => {
+        googleLogout();
+        setUser(null);
         localStorage.removeItem('user');
-      }
-    }
-    setLoading(false);
-  }, []);
+    };
 
-  const loginWithGoogle = async (googleToken) => {
-    setLoading(true);
-    setError(null);
+    const value = {
+        user,
+        loading,
+        error,
+        loginWithGoogle,
+        logout
+    };
 
-    try {
-      const response = await fetch(`${BACKEND_URL}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ google_token: googleToken })
-      });
-
-      if (!response.ok) {
-        throw new Error('Authentication failed');
-      }
-
-      const data = await response.json();
-
-      // Store JWT and user info
-      localStorage.setItem('access_token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-
-      setUser(data.user);
-      setLoading(false);
-      return data.user;
-    } catch (err) {
-      setError(err.message);
-      setLoading(false);
-      throw err;
-    }
-  };
-
-  const logout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
-    setUser(null);
-  };
-
-  const getAccessToken = () => {
-    return localStorage.getItem('access_token');
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, loading, error, loginWithGoogle, logout, getAccessToken }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-};
+    return (
+        <AuthContext.Provider value={value}>
+            {!loading && children}
+        </AuthContext.Provider>
+    );
+}
