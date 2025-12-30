@@ -27,7 +27,9 @@ app.add_middleware(
 
 # Serve frontend static files (if they exist)
 if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    # Mount static assets (JS, CSS, images) at /assets
+    if os.path.exists("static/assets"):
+        app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 
 # Initialize Agent (Gemini 3 Flash)
 agent = VoiceAgent(
@@ -62,8 +64,9 @@ class GoogleAuthRequest(BaseModel):
 
 # --- Endpoints ---
 
-@app.get("/")
-async def root():
+# Health check endpoint for monitoring
+@app.get("/api/health")
+async def health_check():
     return {"message": "VoiceVault Backend is Running"}
 
 @app.post("/auth/google")
@@ -537,3 +540,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_text(json.dumps(response_payload))
     except (WebSocketDisconnect, Exception) as e:
         print(f"WebSocket Error: {e}")
+
+# SPA Fallback: Serve React app for all unmatched routes
+# This MUST be at the end after all API routes
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    """Serve the React SPA for all non-API routes"""
+    # Check if static/index.html exists (frontend build)
+    index_path = "static/index.html"
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    # Fallback if no frontend build
+    return {"error": "Frontend not built. Visit /api/health for backend status."}
+
