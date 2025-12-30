@@ -9,7 +9,7 @@ from session_manager import SessionManager
 class VoiceAgent:
     def __init__(self, project_id: str, location: str):
         # Load service account credentials explicitly
-        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIAL")
         if credentials_path and os.path.exists(credentials_path):
             credentials = service_account.Credentials.from_service_account_file(
                 credentials_path,

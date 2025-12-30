@@ -36,7 +36,7 @@
 2.  Place your GCP Key: `tunjiax-wallet-key.json`.
 3.  Create `.env`:
     ```env
-    GOOGLE_APPLICATION_CREDENTIALS=./tunjiax-wallet-key.json
+    GOOGLE_APPLICATION_CREDENTIAL=./tunjiax-wallet-key.json
     ELEVENLABS_CUSTOM_LLM_SECRET=your_secure_generated_key
     ```
 4.  Install dependencies:

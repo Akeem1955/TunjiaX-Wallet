@@ -1,6 +1,16 @@
 # Multi-stage build: Frontend + Backend in one container
 FROM node:18-slim AS frontend-builder
 
+# Build arguments for frontend env vars (passed at build time)
+ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_BACKEND_URL
+ARG VITE_ELEVENLABS_AGENT_ID
+
+# Set as environment variables for Vite build
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+ENV VITE_ELEVENLABS_AGENT_ID=$VITE_ELEVENLABS_AGENT_ID
+
 # Build frontend
 WORKDIR /frontend
 COPY frontend/package*.json ./
