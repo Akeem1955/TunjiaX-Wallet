@@ -39,14 +39,20 @@ agent = VoiceAgent(
 
 class Message(BaseModel):
     role: str
-    content: str
+    content: Optional[str] = None  # Can be None for some requests
+    
+    class Config:
+        extra = 'allow'  # Allow extra fields from ElevenLabs
 
 class ChatCompletionRequest(BaseModel):
-    model: str
+    model: Optional[str] = None  # ElevenLabs may not send this
     messages: List[Message]
     stream: Optional[bool] = False
     tools: Optional[List[Dict[str, Any]]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
+    
+    class Config:
+        extra = 'allow'  # Allow extra fields from ElevenLabs
 
 class ImageVerificationRequest(BaseModel):
     image: str # Base64 string
@@ -395,15 +401,27 @@ async def verify_face(request: FaceVerificationRequest):
         traceback.print_exc()
         return {"verified": False, "reason": f"Error: {str(e)}"}
 
+# Debug endpoint to see what ElevenLabs sends (remove after debugging)
+from fastapi import Request
+
 @app.post("/v1/chat/completions")
 async def chat_completions(
-    request: ChatCompletionRequest, 
+    request: Request,
     authorization: str = Header(None),
     x_user_id: Optional[int] = Header(None, alias="X-User-ID"),
     x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
 ):
     import sys
-    print(f"\n[MAIN] Received /v1/chat/completions request", file=sys.stderr)
+    
+    # Log raw request body for debugging
+    raw_body = await request.body()
+    print(f"\n[MAIN] ========== RAW REQUEST ==========\n{raw_body.decode()}\n==============================", file=sys.stderr)
+    
+    # Parse the body manually
+    body = await request.json()
+    chat_request = ChatCompletionRequest(**body)
+    
+    print(f"[MAIN] Received /v1/chat/completions request", file=sys.stderr)
     
     # 1. Validate API Key
     expected_key = os.getenv("ELEVENLABS_CUSTOM_LLM_SECRET")
@@ -416,10 +434,10 @@ async def chat_completions(
     # 2. Get user_id (default to 1 for testing if not provided)
     user_id = x_user_id if x_user_id else 1
     session_id = x_session_id  # Can be None, voice_agent will use user_id as session_id
-    print(f"[MAIN] ✅ Authorized. User ID: {user_id}, Session ID: {session_id or 'default'}, Processing message: {request.messages[-1].content}", file=sys.stderr)
+    print(f"[MAIN] ✅ Authorized. User ID: {user_id}, Session ID: {session_id or 'default'}, Processing message: {chat_request.messages[-1].content}", file=sys.stderr)
 
     # 3. Extract User Message
-    user_message = request.messages[-1].content
+    user_message = chat_request.messages[-1].content
 
     # 4. Get Response from Gemini (VoiceAgent) with user_id and session_id
     print(f"[MAIN] Calling VoiceAgent.process_input()...", file=sys.stderr)
@@ -427,19 +445,19 @@ async def chat_completions(
     print(f"[MAIN] VoiceAgent returned: Text='{response_text[:30]}...', Tool='{tool_command}'", file=sys.stderr)
 
     # 4. Handle Streaming Response (ElevenLabs expects chunks)
-    if request.stream:
+    if chat_request.stream:
         print(f"[MAIN] Streaming response back to Client...", file=sys.stderr)
         async def event_generator():
             request_id = f"chatcmpl-{int(time.time())}"
             created = int(time.time())
             
             # Chunk 1: Role
-            yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]})}\n\n"
+            yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': chat_request.model or 'gemini-2.0-flash', 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]})}\n\n"
             
             # Chunk 2: Content
             words = response_text.split(" ")
             for word in words:
-                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': word + ' '}, 'finish_reason': None}]})}\n\n"
+                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': chat_request.model or 'gemini-2.0-flash', 'choices': [{'index': 0, 'delta': {'content': word + ' '}, 'finish_reason': None}]})}\n\n"
                 await asyncio.sleep(0.01) # Micro-delay for stream stability
 
             # Chunk 3: Tools (if any)
@@ -454,11 +472,11 @@ async def chat_completions(
                         'arguments': '{}' 
                     }
                 }
-                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'tool_calls': [tool_payload]}, 'finish_reason': None}]})}\n\n"
+                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': chat_request.model or 'gemini-2.0-flash', 'choices': [{'index': 0, 'delta': {'tool_calls': [tool_payload]}, 'finish_reason': None}]})}\n\n"
 
             # Chunk 4: Stop
             finish_reason = "tool_calls" if tool_command else "stop"
-            yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}]})}\n\n"
+            yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': chat_request.model or 'gemini-2.0-flash', 'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}]})}\n\n"
             yield "data: [DONE]\n\n"
             print(f"[MAIN] Stream finished.", file=sys.stderr)
 
@@ -470,7 +488,7 @@ async def chat_completions(
             "id": f"chatcmpl-{int(time.time())}",
             "object": "chat.completion",
             "created": int(time.time()),
-            "model": request.model,
+            "model": chat_request.model or "gemini-2.0-flash",
             "choices": [{
                 "index": 0,
                 "message": {
