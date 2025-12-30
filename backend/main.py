@@ -4,7 +4,8 @@ import asyncio
 import time
 from typing import List, Optional, Dict, Any, Union
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 from voice_agent import VoiceAgent
@@ -23,6 +24,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve frontend static files (if they exist)
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Initialize Agent (Gemini 3 Flash)
 agent = VoiceAgent(
