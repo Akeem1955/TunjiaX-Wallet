@@ -76,4 +76,16 @@
 4.  When asked to authorize, look at the camera and click **SCAN FACE**.
 
 ---
-*Built with ❤️ for Lagos.*
+*Built with ❤️*
+next things to do 
+
+let push this version of backend to cloud run
+so we can configure elven labs agent
+
+Configure ElevenLabs Agent with:
+Custom LLM backend URL
+Dynamic variable headers (X-User-ID)
+
+Create session management (store JWT, user_id)
+Add user profile/balance display
+Deploy frontend (Firebase Hosting / Vercel / Cloud Run)

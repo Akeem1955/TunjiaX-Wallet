@@ -1,5 +1,13 @@
 fastapi
 uvicorn
 websockets
-google-cloud-aiplatform
+google-genai>=1.0.0
 python-dotenv
+cloud-sql-python-connector[pymysql]
+pymysql
+sqlalchemy
+google-auth
+pyjwt
+bcrypt
+deepface
+tf-keras

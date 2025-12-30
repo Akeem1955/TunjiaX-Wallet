@@ -1,12 +1,14 @@
-# Use the official Python image
-FROM python:3.9-slim
+# Use Python 3.11 (matches development environment)
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (if any)
+# Install system dependencies for OpenCV and DeepFace
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file

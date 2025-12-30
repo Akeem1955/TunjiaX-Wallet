@@ -1,14 +1,21 @@
 import os
 import json
 import asyncio
+import time
+from typing import List, Optional, Dict, Any, Union
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header
 from fastapi.responses import StreamingResponse
-from voice_agent import VoiceAgent
-
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
+from voice_agent import VoiceAgent
+from dotenv import load_dotenv
+from auth import verify_google_token, get_or_create_user, create_access_token
+
+load_dotenv()
 
 app = FastAPI()
 
+# Allow CORS for local frontend testing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,19 +24,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Voice Agent
-# In production, use environment variables for GCP_PROJECT and GCP_LOCATION
+# Initialize Agent (Gemini 3 Flash)
 agent = VoiceAgent(
-    project_id=os.getenv("GCP_PROJECT", "your-project-id"),
+    project_id=os.getenv("GCP_PROJECT", "tunjiax-wallet"),
     location=os.getenv("GCP_LOCATION", "us-central1")
 )
 
-@app.get("/")
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any, Union
-import os
-import json
-import time
+# --- Pydantic Models ---
 
 class Message(BaseModel):
     role: str
@@ -42,47 +43,208 @@ class ChatCompletionRequest(BaseModel):
     tools: Optional[List[Dict[str, Any]]] = None
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None
 
+class ImageVerificationRequest(BaseModel):
+    image: str # Base64 string
+
+class GoogleAuthRequest(BaseModel):
+    google_token: str  # Google OAuth token from frontend
+
+# --- Endpoints ---
+
+@app.get("/")
+async def root():
+    return {"message": "VoiceVault Backend is Running"}
+
+@app.post("/auth/google")
+async def google_auth(request: GoogleAuthRequest):
+    """
+    Authenticates user with Google OAuth token.
+    Creates new user if first time sign-in.
+    Returns JWT token and user info.
+    """
+    import sys
+    print(f"\n[AUTH] Google authentication request received", file=sys.stderr)
+    
+    try:
+        # Verify Google token
+        google_user_info = verify_google_token(request.google_token)
+        print(f"[AUTH] Google token verified for: {google_user_info['email']}", file=sys.stderr)
+        
+        # Get or create user
+        user_info = get_or_create_user(google_user_info)
+        print(f"[AUTH] User {'created' if user_info['is_new_user'] else 'found'}: user_id={user_info['user_id']}", file=sys.stderr)
+        
+        # Generate JWT token
+        access_token = create_access_token(user_info["user_id"], user_info["email"])
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "user_id": user_info["user_id"],
+                "email": user_info["email"],
+                "full_name": user_info["full_name"],
+                "phone_number": user_info["phone_number"],
+                "is_new_user": user_info["is_new_user"]
+            }
+        }
+    except Exception as e:
+        print(f"[AUTH] ❌ Authentication failed: {str(e)}", file=sys.stderr)
+        raise HTTPException(status_code=401, detail=str(e))
+
+# Biometric Face Verification
+class FaceVerificationRequest(BaseModel):
+    image: str  # Base64 image from webcam
+    user_id: Optional[int] = None  # Optional, can extract from JWT instead
+
+@app.post("/verify-face")
+async def verify_face(request: FaceVerificationRequest):
+    """
+    Compares live selfie with stored user profile image using DeepFace
+    """
+    import sys
+    import base64
+    import tempfile
+    import os
+    from pathlib import Path
+    from tools import get_db_connection
+    
+    print(f"\n[FACE] --- DEEPFACE VERIFICATION START ---", file=sys.stderr)
+    
+    try:
+        # For demo: use user_id=1 if not provided
+        user_id = request.user_id if request.user_id else 1
+        print(f"[FACE] Verifying face for user_id: {user_id}", file=sys.stderr)
+        
+        # Get user's stored profile image from database (BLOB)
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT profile_image FROM users WHERE user_id = %s",
+            (user_id,)
+        )
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        if not result or not result[0]:
+            print(f"[FACE] ❌ No profile image found for user", file=sys.stderr)
+            return {"verified": False, "reason": "No profile image on file"}
+        
+        stored_image_blob = result[0]  # This is raw bytes from BLOB
+        print(f"[FACE] Retrieved stored profile image ({len(stored_image_blob)} bytes)", file=sys.stderr)
+        
+        # Decode live image from base64
+        live_image_data = request.image.split(",")[1] if "," in request.image else request.image
+        live_image_bytes = base64.b64decode(live_image_data)
+        
+        print(f"[FACE] Decoded live image ({len(live_image_bytes)} bytes)", file=sys.stderr)
+        
+        # Create temporary files for DeepFace
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as live_temp:
+            live_temp.write(live_image_bytes)  # Already decoded above
+            live_path = live_temp.name
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as stored_temp:
+            stored_temp.write(stored_image_blob)  # Raw bytes from BLOB
+            stored_path = stored_temp.name
+        
+        try:
+            print(f"[FACE] Running DeepFace verification...", file=sys.stderr)
+            
+            # Import DeepFace
+            from deepface import DeepFace
+            
+            # Verify faces using DeepFace
+            result = DeepFace.verify(
+                img1_path=stored_path,
+                img2_path=live_path,
+                model_name="ArcFace",  # State-of-the-art accuracy
+                enforce_detection=False,  # Allow even if face detection isn't perfect
+                detector_backend="opencv"
+            )
+            
+            verified = result["verified"]
+            distance = result["distance"]
+            threshold = result["threshold"]
+            
+            # Calculate confidence (inverse of distance normalized)
+            confidence = max(0.0, min(1.0, 1.0 - (distance / threshold)))
+            
+            print(f"[FACE] ✅ DeepFace result: verified={verified}, distance={distance:.4f}, threshold={threshold:.4f}", file=sys.stderr)
+            
+            return {
+                "verified": verified,
+                "confidence": round(confidence, 2),
+                "reason": "Same person verified" if verified else "Different people detected",
+                "distance": round(distance, 4),
+                "threshold": round(threshold, 4)
+            }
+            
+        finally:
+            # Clean up temporary files
+            try:
+                os.unlink(live_path)
+                os.unlink(stored_path)
+            except:
+                pass
+            
+    except Exception as e:
+        print(f"[FACE] ❌ Verification error: {str(e)}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return {"verified": False, "reason": f"Error: {str(e)}"}
+
 @app.post("/v1/chat/completions")
-async def chat_completions(request: ChatCompletionRequest, authorization: str = Header(None)):
+async def chat_completions(
+    request: ChatCompletionRequest, 
+    authorization: str = Header(None),
+    x_user_id: Optional[int] = Header(None, alias="X-User-ID"),
+    x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
+):
+    import sys
+    print(f"\n[MAIN] Received /v1/chat/completions request", file=sys.stderr)
+    
     # 1. Validate API Key
     expected_key = os.getenv("ELEVENLABS_CUSTOM_LLM_SECRET")
-    if not authorization or authorization.split(" ")[1] != expected_key:
-        # User said: "if it does not match our server wont respond" - raising 401
+    print(f"[MAIN] Validating API Key...", file=sys.stderr)
+    
+    if expected_key and (not authorization or authorization.split(" ")[1] != expected_key):
+        print(f"[MAIN] ❌ Unauthorized: Key mismatched", file=sys.stderr)
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    print(f"Received Custom LLM Request: {request.messages[-1].content}")
+    # 2. Get user_id (default to 1 for testing if not provided)
+    user_id = x_user_id if x_user_id else 1
+    session_id = x_session_id  # Can be None, voice_agent will use user_id as session_id
+    print(f"[MAIN] ✅ Authorized. User ID: {user_id}, Session ID: {session_id or 'default'}, Processing message: {request.messages[-1].content}", file=sys.stderr)
 
-    # 2. Extract User Message
+    # 3. Extract User Message
     user_message = request.messages[-1].content
 
-    # 3. Get Response from Gemini (VoiceAgent)
-    # We need to modify agent to return not just text, but identifying if a tool was called.
-    response_text, tool_command = await agent.process_input(user_message)
+    # 4. Get Response from Gemini (VoiceAgent) with user_id and session_id
+    print(f"[MAIN] Calling VoiceAgent.process_input()...", file=sys.stderr)
+    response_text, tool_command = await agent.process_input(user_message, user_id=user_id, session_id=session_id)
+    print(f"[MAIN] VoiceAgent returned: Text='{response_text[:30]}...', Tool='{tool_command}'", file=sys.stderr)
 
     # 4. Handle Streaming Response (ElevenLabs expects chunks)
     if request.stream:
+        print(f"[MAIN] Streaming response back to Client...", file=sys.stderr)
         async def event_generator():
             request_id = f"chatcmpl-{int(time.time())}"
             created = int(time.time())
             
             # Chunk 1: Role
-            yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': null}]})}\n\n"
+            yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'role': 'assistant'}, 'finish_reason': None}]})}\n\n"
             
-            # Chunk 2: Content (Simulated streaming for now since Gemini is mock-async here)
-            # In real Gemini async stream, we would yield per token.
+            # Chunk 2: Content
             words = response_text.split(" ")
             for word in words:
-                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': word + ' '}, 'finish_reason': null}]})}\n\n"
-                # await asyncio.sleep(0.05) # Tiny artificial delay for realism? Removed for speed.
+                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'content': word + ' '}, 'finish_reason': None}]})}\n\n"
+                await asyncio.sleep(0.01) # Micro-delay for stream stability
 
             # Chunk 3: Tools (if any)
             if tool_command == "TRIGGER_BIOMETRIC":
-                # ElevenLabs Format: We must return a tool call that matches what the Client SDK expects.
-                # The user's SDK has clientTools: { triggerBiometric: ... }
-                # Note: ElevenLabs Custom LLM docs usually expect strict tool_calls format if 'tools' were passed in request.
-                # Assuming ElevenLabs passes the available client tools in the request, we should match it.
-                # For this implementation, we force the tool call structure.
-                
+                print(f"[MAIN] Sending TRIGGER_BIOMETRIC tool call in stream", file=sys.stderr)
                 tool_call_id = f"call_{int(time.time())}"
                 tool_payload = {
                     'id': tool_call_id,
@@ -92,12 +254,13 @@ async def chat_completions(request: ChatCompletionRequest, authorization: str = 
                         'arguments': '{}' 
                     }
                 }
-                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'tool_calls': [tool_payload]}, 'finish_reason': null}]})}\n\n"
+                yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {'tool_calls': [tool_payload]}, 'finish_reason': None}]})}\n\n"
 
             # Chunk 4: Stop
             finish_reason = "tool_calls" if tool_command else "stop"
             yield f"data: {json.dumps({'id': request_id, 'object': 'chat.completion.chunk', 'created': created, 'model': request.model, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}]})}\n\n"
             yield "data: [DONE]\n\n"
+            print(f"[MAIN] Stream finished.", file=sys.stderr)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -131,16 +294,9 @@ async def chat_completions(request: ChatCompletionRequest, authorization: str = 
 
         return response_obj
 
-class ImageVerificationRequest(BaseModel):
-    image: str # Base64 string
-
 @app.post("/verify-face")
 async def verify_face_endpoint(request: ImageVerificationRequest):
     print("Received face verification request")
-    # verification_result = await agent.verify_face(request.image)
-    # Using a direct mock-up of the agent call for stability in this step, 
-    # but strictly calling the real agent method in next step.
-    
     verified = await agent.verify_identity_with_vision(request.image)
     return {"verified": verified}
 
@@ -148,33 +304,18 @@ async def verify_face_endpoint(request: ImageVerificationRequest):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("Client connected to voice stream")
-    
     try:
         while True:
-            # Receive audio/text data from client
             data = await websocket.receive_text()
             message = json.loads(data)
-            
-            # Message structure: {"text": "Transfer 5k to Bisola"} 
-            # (In a real audio scenario, this would handle audio chunks, but we start with text for logic verification)
             user_input = message.get("text")
-            
             if user_input:
                 print(f"Received user input: {user_input}")
-                
-                # Process with Gemini
                 response_text, tool_command = await agent.process_input(user_input)
-                
-                # Send back response
                 response_payload = {
-                    "audio_text": response_text, # To be sent to ElevenLabs
-                    "tool_command": tool_command # e.g., "TRIGGER_BIOMETRIC"
+                    "audio_text": response_text,
+                    "tool_command": tool_command
                 }
-                
                 await websocket.send_text(json.dumps(response_payload))
-                
-    except WebSocketDisconnect:
-        print("Client disconnected")
-    except Exception as e:
-        print(f"Error: {e}")
-        await websocket.close()
+    except (WebSocketDisconnect, Exception) as e:
+        print(f"WebSocket Error: {e}")
