@@ -8,33 +8,67 @@ export function Button({
     className = '',
     loading = false,
     icon,
+    fullWidth = false,
     ...props
 }) {
     const variants = {
-        primary: "bg-brand text-white dark:text-black font-semibold hover:bg-brand-dark dark:hover:bg-brand-light shadow-[0_4px_14px_0_rgba(6,182,212,0.39)] dark:shadow-[0_0_20px_rgba(6,182,212,0.3)]",
-        secondary: "bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white hover:bg-gray-200 dark:hover:bg-white/20 border border-gray-200 dark:border-white/10",
-        danger: "bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-500 border border-red-100 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20",
-        ghost: "bg-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+        primary: `
+            bg-brand-600 text-white font-semibold 
+            hover:bg-brand-700 active:bg-brand-800
+            shadow-brand hover:shadow-brand-lg
+            focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2
+        `,
+        secondary: `
+            bg-surface-100 text-slate-700 font-medium
+            border border-surface-300
+            hover:bg-surface-200 hover:border-surface-400 active:bg-surface-300
+            focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2
+        `,
+        outline: `
+            bg-transparent text-brand-600 font-medium
+            border-2 border-brand-600
+            hover:bg-brand-50 active:bg-brand-100
+            focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2
+        `,
+        danger: `
+            bg-rose-50 text-rose-600 font-medium
+            border border-rose-200
+            hover:bg-rose-100 hover:border-rose-300 active:bg-rose-200
+            focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2
+        `,
+        success: `
+            bg-emerald-50 text-emerald-700 font-medium
+            border border-emerald-200
+            hover:bg-emerald-100 hover:border-emerald-300 active:bg-emerald-200
+            focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2
+        `,
+        ghost: `
+            bg-transparent text-slate-600 font-medium
+            hover:bg-surface-100 hover:text-slate-900 active:bg-surface-200
+            focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2
+        `,
     };
 
     const sizes = {
-        sm: "px-3 py-1.5 text-sm",
-        md: "px-6 py-3 text-base",
-        lg: "px-8 py-4 text-lg",
-        icon: "p-3"
+        sm: 'px-3 py-1.5 text-sm rounded-lg gap-1.5',
+        md: 'px-5 py-2.5 text-base rounded-xl gap-2',
+        lg: 'px-7 py-3.5 text-lg rounded-xl gap-2.5',
+        icon: 'p-2.5 rounded-xl',
     };
 
     return (
         <motion.button
-            whileHover={!props.disabled && { scale: 1.02 }}
+            whileHover={!props.disabled && { scale: 1.01 }}
             whileTap={!props.disabled && { scale: 0.98 }}
             className={`
-        rounded-xl flex items-center justify-center gap-2 transition-all duration-200
-        ${variants[variant]} 
-        ${sizes[size]} 
-        ${props.disabled || loading ? 'opacity-50 cursor-not-allowed' : ''}
-        ${className}
-      `}
+                inline-flex items-center justify-center
+                transition-all duration-200
+                disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none
+                ${variants[variant]}
+                ${sizes[size]}
+                ${fullWidth ? 'w-full' : ''}
+                ${className}
+            `}
             disabled={props.disabled || loading}
             {...props}
         >
@@ -42,7 +76,7 @@ export function Button({
                 <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
             ) : (
                 <>
-                    {icon && <span className="text-xl">{icon}</span>}
+                    {icon && <span className="flex-shrink-0">{icon}</span>}
                     {children}
                 </>
             )}

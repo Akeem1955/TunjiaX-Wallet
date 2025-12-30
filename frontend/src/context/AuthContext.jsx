@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    token: credential,
+                    google_token: credential,
                     email: decoded.email,
                     name: decoded.name,
                     picture: decoded.picture

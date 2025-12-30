@@ -1,91 +1,61 @@
-# TunjiaX-Wallet: Banking at the Speed of Thought
+# TunjiaX-Wallet: Voice Banking for Nigeria
 
-**TunjiaX-Wallet** is a next-generation voice banking assistant designed for high-stress, high-speed environments (like Balogun Market in Lagos). It enables hands-free, secure financial transactions using conversational AI and biometric verification.
+Voice-first banking assistant using **Gemini 2.0 Flash** + **ElevenLabs** + **DeepFace biometrics**.
 
-## The Narrative ("The Power Move")
+## Quick Start (Local Development)
 
-> **Scene**: Tunde is in a noisy market. He needs to pay Bisola immediately. He can't type. He just speaks.
+### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+# Configure .env with your values
+python -m uvicorn main:app --reload --port 8080
+```
 
-1.  **The Ears (Input)**: Tunde says *"Transfer 20k to Bisola"*. **ElevenLabs Conversational AI** captures this over WebSocket, cutting through the noise.
-2.  **The Brain (Logic)**: **Gemini 3 Flash** (via Python Backend) analyzes the intent, checks transaction history (Cloud SQL), and identifies the beneficiary ("Abisola Adebayo").
-3.  **The Mouth (Response)**: Gemini replies via **ElevenLabs Turbo v2.5** with an ultra-realistic Nigerian accent: *"I found Abisola Adebayo. Which bank?"*
-4.  **The Loop**: Tunde confirms *"Opay"*. Gemini updates the transaction state.
-5.  **The Security**: Gemini determines risk and triggers a **Biometric Scan**. The Web App intercepts this and opens the **Webcam** for **Gemini Vision** identity verification.
-6.  **Success**: Face verified. Money moved. Deal closed.
+### Frontend
+```bash
+cd frontend
+npm install
+# Configure .env with your values
+npm run dev
+```
 
-## Technology Stack
+## Cloud Run Deployment
 
-*   **Frontend**: React (Vite) + Tailwind CSS
-    *   `@11labs/react`: For low-latency conversational voice streaming.
-    *   `react-webcam`: For capturing real-world biometric data.
-*   **Backend**: Python (FastAPI)
-    *   **Custom LLM Server**: Acts as an OpenAI-compatible endpoint (`/v1/chat/completions`) for ElevenLabs.
-    *   **Gemini 3 Flash**: For logic, intent recognition, and tool calling.
-    *   **Gemini Vision**: For analyzing webcam frames (`/verify-face`).
+### 1. Build & Push
+```bash
+gcloud builds submit --tag gcr.io/tunjiax-wallet-482614/tunjiax-app \
+  --build-arg VITE_GOOGLE_CLIENT_ID=your_client_id \
+  --build-arg VITE_BACKEND_URL=https://tunjiax-app-xxxxx.run.app \
+  --build-arg VITE_ELEVENLABS_AGENT_ID=your_agent_id
+```
 
-## Setup Instructions
+### 2. Deploy
+```bash
+gcloud run deploy tunjiax-app \
+  --image gcr.io/tunjiax-wallet-482614/tunjiax-app \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars="GCP_PROJECT=tunjiax-wallet-482614,GCP_LOCATION=us-central1" \
+  --set-secrets="ELEVENLABS_CUSTOM_LLM_SECRET=elevenlabs-secret:latest,DB_PASSWORD=db-password:latest,JWT_SECRET_KEY=jwt-secret:latest,GOOGLE_CLIENT_ID=google-client-id:latest" \
+  --add-cloudsql-instances=tunjiax-wallet-482614:us-central1:tunjiax-db
+```
 
-### 1. Prerequisites
-*   Node.js & npm
-*   Python 3.9+
-*   Google Cloud Service Account Key (`tunjiax-wallet-key.json`)
-*   ElevenLabs Account (Agent ID & API Key)
+## Environment Variables
 
-### 2. Backend Setup
-1.  Navigate to `backend/`.
-2.  Place your GCP Key: `tunjiax-wallet-key.json`.
-3.  Create `.env`:
-    ```env
-    GOOGLE_APPLICATION_CREDENTIAL=./tunjiax-wallet-key.json
-    ELEVENLABS_CUSTOM_LLM_SECRET=your_secure_generated_key
-    ```
-4.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-5.  Run Server:
-    ```bash
-    python -m uvicorn main:app --reload --port 8080
-    ```
-
-### 3. Frontend Setup
-1.  Navigate to `frontend/`.
-2.  Create `.env`:
-    ```env
-    VITE_ELEVENLABS_API_KEY=your_elevenlabs_api_key
-    ```
-3.  Install dependencies:
-    ```bash
-    npm install
-    ```
-4.  Run App:
-    ```bash
-    npm run dev
-    ```
-
-### 4. ElevenLabs Agent Configuration
-1.  Go to **ElevenLabs Dashboard -> Agents**.
-2.  **LLM**: Set to "Custom LLM".
-3.  **API URL**: Your backend URL (Requires `ngrok` if testing locally: `https://your-ngrok-url/v1/chat/completions`).
-4.  **API Key**: Match the `ELEVENLABS_CUSTOM_LLM_SECRET` from your backend `.env`.
-
-## Usage
-1.  Open `http://localhost:5173`.
-2.  Click the **Microphone** to connect to TunjiaX.
-3.  Speak your transaction request.
-4.  When asked to authorize, look at the camera and click **SCAN FACE**.
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `VITE_GOOGLE_CLIENT_ID` | Build-arg | Google OAuth Client ID |
+| `VITE_BACKEND_URL` | Build-arg | Backend URL (same origin for combined deploy) |
+| `VITE_ELEVENLABS_AGENT_ID` | Build-arg | ElevenLabs Agent ID |
+| `GOOGLE_CLIENT_ID` | Runtime | Same as VITE_GOOGLE_CLIENT_ID |
+| `GCP_PROJECT` | Runtime | Google Cloud Project ID |
+| `GCP_LOCATION` | Runtime | Vertex AI region |
+| `CLOUD_SQL_CONNECTION_NAME` | Runtime | Cloud SQL connection string |
+| `DB_PASSWORD` | Secret | Database password |
+| `JWT_SECRET_KEY` | Secret | JWT signing key |
+| `ELEVENLABS_CUSTOM_LLM_SECRET` | Secret | ElevenLabs API key |
 
 ---
-*Built with ❤️*
-next things to do 
-
-let push this version of backend to cloud run
-so we can configure elven labs agent
-
-Configure ElevenLabs Agent with:
-Custom LLM backend URL
-Dynamic variable headers (X-User-ID)
-
-Create session management (store JWT, user_id)
-Add user profile/balance display
-Deploy frontend (Firebase Hosting / Vercel / Cloud Run)
+*Built with ❤️ for the Nigerian hustle*

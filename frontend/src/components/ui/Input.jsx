@@ -1,27 +1,71 @@
-import React from 'react';
+import React, { forwardRef } from 'react';
 
-export function Input({ label, error, className = '', ...props }) {
+export const Input = forwardRef(({
+    label,
+    error,
+    helperText,
+    icon,
+    className = '',
+    containerClassName = '',
+    ...props
+}, ref) => {
+    const inputId = props.id || props.name || `input-${Math.random().toString(36).slice(2)}`;
+
     return (
-        <div className="w-full">
+        <div className={`w-full ${containerClassName}`}>
             {label && (
-                <label className="block text-xs uppercase tracking-wider text-gray-400 mb-2 font-medium">
+                <label
+                    htmlFor={inputId}
+                    className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
                     {label}
+                    {props.required && <span className="text-rose-500 ml-0.5">*</span>}
                 </label>
             )}
-            <input
-                className={`
-          w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 
-          text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-600
-          focus:outline-none focus:border-brand focus:bg-white dark:focus:bg-white/10 ring-0 focus:ring-2 focus:ring-brand/20 dark:focus:ring-brand/10
-          transition-all duration-200
-          ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20' : ''}
-          ${className}
-        `}
-                {...props}
-            />
+
+            <div className="relative">
+                {icon && (
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                        {icon}
+                    </div>
+                )}
+
+                <input
+                    ref={ref}
+                    id={inputId}
+                    className={`
+                        w-full px-4 py-3 
+                        bg-white border rounded-xl
+                        text-slate-900 placeholder-slate-400
+                        transition-all duration-200
+                        focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-brand-500
+                        disabled:bg-surface-100 disabled:text-slate-500 disabled:cursor-not-allowed
+                        ${icon ? 'pl-10' : ''}
+                        ${error
+                            ? 'border-rose-300 focus:ring-rose-400 focus:border-rose-500'
+                            : 'border-surface-300 hover:border-surface-400'
+                        }
+                        ${className}
+                    `}
+                    aria-invalid={error ? 'true' : 'false'}
+                    aria-describedby={error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined}
+                    {...props}
+                />
+            </div>
+
             {error && (
-                <p className="mt-1 text-xs text-red-400">{error}</p>
+                <p id={`${inputId}-error`} className="mt-1.5 text-sm text-rose-600" role="alert">
+                    {error}
+                </p>
+            )}
+
+            {helperText && !error && (
+                <p id={`${inputId}-helper`} className="mt-1.5 text-sm text-slate-500">
+                    {helperText}
+                </p>
             )}
         </div>
     );
-}
+});
+
+Input.displayName = 'Input';

@@ -235,6 +235,63 @@ async def get_transactions(user_id: int = 1, limit: int = 20):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/check-profile-image")
+async def check_profile_image(user_id: int = 1):
+    """Check if user has a profile image"""
+    try:
+        from tools import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT profile_image FROM users 
+            WHERE user_id = %s
+        """, (user_id,))
+        
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        
+        has_image = result and result[0] is not None and len(result[0]) > 0
+        
+        return {"has_image": has_image}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/upload-profile-image")
+async def upload_profile_image(request: dict):
+    """Upload user's profile image for biometric authentication"""
+    try:
+        user_id = request.get("user_id", 1)
+        image_data = request.get("image", "")
+        
+        if not image_data:
+            raise HTTPException(status_code=400, detail="No image provided")
+        
+        # Decode base64 image
+        import base64
+        image_bytes = base64.b64decode(image_data.split(",")[1] if "," in image_data else image_data)
+        
+        from tools import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Update user's profile image
+        cursor.execute("""
+            UPDATE users 
+            SET profile_image = %s 
+            WHERE user_id = %s
+        """, (image_bytes, user_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return {"success": True, "message": "Profile image uploaded successfully"}
+    except Exception as e:
+        print(f"Error uploading profile image: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Biometric Face Verification
 class FaceVerificationRequest(BaseModel):
     image: str  # Base64 image from webcam

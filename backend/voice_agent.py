@@ -9,7 +9,7 @@ from session_manager import SessionManager
 class VoiceAgent:
     def __init__(self, project_id: str, location: str):
         # Load service account credentials explicitly
-        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIAL")
+        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
         if credentials_path and os.path.exists(credentials_path):
             credentials = service_account.Credentials.from_service_account_file(
                 credentials_path,
@@ -153,10 +153,16 @@ To process ANY transfer, you must identify:
                                 amount=args.get('amount'),
                                 beneficiary_name=args.get('beneficiary_name'),
                                 bank_name=args.get('bank_name'),
-                                account_number=args.get('account_number')
+                                account_number=args.get('account_number'),
+                                user_id=user_id  # Pass user_id for proper account lookup
                             )
                             tool_command = "transfer_complete"
-                            response_text = f"Transfer successful! Transaction ID: {result['transaction_id']}"
+                            # Handle success/failure from execute_transfer
+                            if result.get('status') == 'success':
+                                response_text = f"Transfer successful! {result.get('message', '')} Your new balance is {result.get('new_balance_ngn', '')}."
+                            else:
+                                response_text = f"Transfer failed: {result.get('message', 'Unknown error')}"
+                                tool_command = "transfer_failed"
                     elif part.text:
                         response_text += part.text
             

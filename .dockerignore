@@ -1,23 +1,34 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv
-*.log
+# Ignore local development files
 .git
 .gitignore
-backend/test_*.py
+*.md
+.env
+.env.*
+!.env.example
+
+# Node
+frontend/node_modules
+frontend/.env
+frontend/.env.*
+
+# Python
+backend/__pycache__
+backend/*.pyc
+backend/.env
+backend/test_*
 backend/setup_test_user.py
 backend/update_user_image.py
-backend/migrations/
-backend/test_images/
-backend/*.md
-backend/.env
-frontend/node_modules/
-frontend/.env
-*.md
-README.md
-.github/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never include in Docker image)
+*.json
+!frontend/package*.json
