@@ -416,13 +416,19 @@ async def chat_completions(
 ):
     import sys
     
-    # Log raw request body for debugging
+    # Log raw request body for debugging (read once, parse from string)
     raw_body = await request.body()
-    print(f"\n[MAIN] ========== RAW REQUEST ==========\n{raw_body.decode()}\n==============================", file=sys.stderr)
+    raw_body_str = raw_body.decode('utf-8')
+    print(f"\n[MAIN] ========== RAW REQUEST ==========\n{raw_body_str}\n==============================", file=sys.stderr)
+    sys.stderr.flush()
     
-    # Parse the body manually
-    body = await request.json()
-    chat_request = ChatCompletionRequest(**body)
+    # Parse the body manually from the raw string
+    try:
+        body = json.loads(raw_body_str)
+        chat_request = ChatCompletionRequest(**body)
+    except Exception as parse_error:
+        print(f"[MAIN] ❌ Parse error: {parse_error}", file=sys.stderr)
+        raise HTTPException(status_code=422, detail=f"Failed to parse request: {parse_error}")
     
     print(f"[MAIN] Received /v1/chat/completions request", file=sys.stderr)
     
