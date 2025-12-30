@@ -1,5 +1,14 @@
 # TunjiaX-Wallet Cloud Build Configuration
 # Triggered by Cloud Build - builds and deploys to Cloud Run
+#
+# IMPORTANT: Set these substitution variables in Cloud Build Trigger settings:
+#   _VITE_GOOGLE_CLIENT_ID
+#   _VITE_BACKEND_URL  
+#   _VITE_ELEVENLABS_AGENT_ID
+#   _ELEVENLABS_SECRET
+#   _DB_PASSWORD
+#   _JWT_SECRET
+#   _CLOUD_SQL_CONNECTION
 
 steps:
   # Build Docker image
@@ -10,11 +19,11 @@ steps:
       - '-t'
       - 'gcr.io/$PROJECT_ID/tunjiax-wallet:latest'
       - '--build-arg'
-      - 'VITE_GOOGLE_CLIENT_ID=871640164960-pqaanvpmqp85c0kvm13qvv0cbp7nuid2.apps.googleusercontent.com'
+      - 'VITE_GOOGLE_CLIENT_ID=${_VITE_GOOGLE_CLIENT_ID}'
       - '--build-arg'
-      - 'VITE_BACKEND_URL=https://tunjiax-wallet-871640164960.us-central1.run.app'
+      - 'VITE_BACKEND_URL=${_VITE_BACKEND_URL}'
       - '--build-arg'
-      - 'VITE_ELEVENLABS_AGENT_ID=agent_6401kdjqx9d6e3dv0efaj08jpv8e'
+      - 'VITE_ELEVENLABS_AGENT_ID=${_VITE_ELEVENLABS_AGENT_ID}'
       - '.'
 
   # Push to Container Registry
@@ -36,11 +45,18 @@ steps:
       - '--allow-unauthenticated'
       - '--memory=4Gi'
       - '--cpu=4'
-      - '--set-env-vars=GCP_PROJECT=$PROJECT_ID,GCP_LOCATION=us-central1,GOOGLE_CLIENT_ID=871640164960-pqaanvpmqp85c0kvm13qvv0cbp7nuid2.apps.googleusercontent.com,ELEVENLABS_CUSTOM_LLM_SECRET=5424ef17a900644bf24b1444036c64947509fbd4632099feb0a0ccddac325c78f17a900644bf24b1444036c64947509fbd4632099feb0a0ccddac325c78,DB_PASSWORD=TunjiaX2025Secure!,JWT_SECRET_KEY=84e5994ee71522b9ae570047552eb1ae95d5516a9b2aadb054faea64a8514006,CLOUD_SQL_CONNECTION_NAME=tunjiax-wallet-482614:us-central1:tunjiax-db'
-      - '--add-cloudsql-instances=tunjiax-wallet-482614:us-central1:tunjiax-db'
+      - '--set-env-vars=GCP_PROJECT=$PROJECT_ID,GCP_LOCATION=us-central1,GOOGLE_CLIENT_ID=${_VITE_GOOGLE_CLIENT_ID},CLOUD_SQL_CONNECTION_NAME=${_CLOUD_SQL_CONNECTION}'
+      - '--set-secrets=ELEVENLABS_CUSTOM_LLM_SECRET=elevenlabs-secret:latest,DB_PASSWORD=db-password:latest,JWT_SECRET_KEY=jwt-secret:latest'
+      - '--add-cloudsql-instances=${_CLOUD_SQL_CONNECTION}'
+
+# Default substitutions (non-sensitive only)
+substitutions:
+  _VITE_BACKEND_URL: 'https://tunjiax-wallet-871640164960.us-central1.run.app'
+  _CLOUD_SQL_CONNECTION: 'tunjiax-wallet-482614:us-central1:tunjiax-db'
 
 images:
   - 'gcr.io/$PROJECT_ID/tunjiax-wallet:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  substitution_option: 'ALLOW_LOOSE'
