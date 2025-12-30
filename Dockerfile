@@ -3,7 +3,7 @@
 # Optimized for Google Cloud Run deployment
 # ==============================================================================
 
-# Stage 1: Build Frontend
+# Stage 1: Build Frontend (Node 20+ required for Vite 7)
 FROM node:20-slim AS frontend-builder
 
 WORKDIR /frontend
@@ -36,13 +36,14 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install system dependencies for DeepFace/OpenCV
+# Note: libgl1-mesa-glx replaced by libgl1 in newer Debian (Trixie)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python dependencies
@@ -61,8 +62,7 @@ ENV PORT=8080
 # Expose the port
 EXPOSE 8080
 
-# Note: Cloud Run handles health checks automatically via HTTP requests
-# No Docker HEALTHCHECK needed - Cloud Run sends traffic only when container responds
+# Cloud Run handles health checks automatically via HTTP requests to /
 
 # Run with uvicorn
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]

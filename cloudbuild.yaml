@@ -1,65 +1,46 @@
-# Google Cloud Build configuration
-# This file allows building via Cloud Console or gcloud
+# TunjiaX-Wallet Cloud Build Configuration
+# Triggered by Cloud Build - builds and deploys to Cloud Run
 
 steps:
-  # Build the Docker image with build args
+  # Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build'
     args:
       - 'build'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/tunjiax-app:$COMMIT_SHA'
-      - '-t'
-      - 'gcr.io/$PROJECT_ID/tunjiax-app:latest'
+      - 'gcr.io/$PROJECT_ID/tunjiax-wallet:latest'
       - '--build-arg'
-      - 'VITE_GOOGLE_CLIENT_ID=${_VITE_GOOGLE_CLIENT_ID}'
+      - 'VITE_GOOGLE_CLIENT_ID=871640164960-pqaanvpmqp85c0kvm13qvv0cbp7nuid2.apps.googleusercontent.com'
       - '--build-arg'
-      - 'VITE_BACKEND_URL=${_VITE_BACKEND_URL}'
+      - 'VITE_BACKEND_URL=https://tunjiax-wallet-871640164960.us-central1.run.app'
       - '--build-arg'
-      - 'VITE_ELEVENLABS_AGENT_ID=${_VITE_ELEVENLABS_AGENT_ID}'
+      - 'VITE_ELEVENLABS_AGENT_ID=agent_6401kdjqx9d6e3dv0efaj08jpv8e'
       - '.'
 
-  # Push the image to Container Registry
+  # Push to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
-      - 'gcr.io/$PROJECT_ID/tunjiax-app:$COMMIT_SHA'
-
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
-      - 'gcr.io/$PROJECT_ID/tunjiax-app:latest'
+    id: 'Push'
+    args: ['push', 'gcr.io/$PROJECT_ID/tunjiax-wallet:latest']
 
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'Deploy'
     entrypoint: gcloud
     args:
       - 'run'
       - 'deploy'
-      - 'tunjiax-app'
-      - '--image'
-      - 'gcr.io/$PROJECT_ID/tunjiax-app:$COMMIT_SHA'
-      - '--region'
-      - 'us-central1'
-      - '--platform'
-      - 'managed'
+      - 'tunjiax-wallet'
+      - '--image=gcr.io/$PROJECT_ID/tunjiax-wallet:latest'
+      - '--region=us-central1'
+      - '--platform=managed'
       - '--allow-unauthenticated'
-      - '--set-env-vars'
-      - 'GCP_PROJECT=$PROJECT_ID,GCP_LOCATION=us-central1'
-      - '--add-cloudsql-instances'
-      - '${_CLOUD_SQL_INSTANCE}'
+      - '--memory=4Gi'
+      - '--cpu=4'
+      - '--set-env-vars=GCP_PROJECT=$PROJECT_ID,GCP_LOCATION=us-central1,GOOGLE_CLIENT_ID=871640164960-pqaanvpmqp85c0kvm13qvv0cbp7nuid2.apps.googleusercontent.com,ELEVENLABS_CUSTOM_LLM_SECRET=5424ef17a900644bf24b1444036c64947509fbd4632099feb0a0ccddac325c78f17a900644bf24b1444036c64947509fbd4632099feb0a0ccddac325c78,DB_PASSWORD=TunjiaX2025Secure!,JWT_SECRET_KEY=84e5994ee71522b9ae570047552eb1ae95d5516a9b2aadb054faea64a8514006,CLOUD_SQL_CONNECTION_NAME=tunjiax-wallet-482614:us-central1:tunjiax-db'
+      - '--add-cloudsql-instances=tunjiax-wallet-482614:us-central1:tunjiax-db'
 
-# Substitution variables (override these when triggering build)
-substitutions:
-  _VITE_GOOGLE_CLIENT_ID: '871640164960-pqaanvpmqp85c0kvm13qvv0cbp7nuid2.apps.googleusercontent.com'
-  _VITE_BACKEND_URL: 'https://tunjiax-app-xxxxxxxx.run.app'
-  _VITE_ELEVENLABS_AGENT_ID: 'agent_6401kdjqx9d6e3dv0efaj08jpv8e'
-  _CLOUD_SQL_INSTANCE: 'tunjiax-wallet-482614:us-central1:tunjiax-db'
-
-# Allow substitution variables to be empty or have default values
-options:
-  substitution_option: 'ALLOW_LOOSE'
-
-# Store the built image
 images:
-  - 'gcr.io/$PROJECT_ID/tunjiax-app:$COMMIT_SHA'
-  - 'gcr.io/$PROJECT_ID/tunjiax-app:latest'
+  - 'gcr.io/$PROJECT_ID/tunjiax-wallet:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
