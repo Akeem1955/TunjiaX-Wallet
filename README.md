@@ -67,4 +67,4 @@ gcloud run deploy tunjiax-app \
 | `ELEVENLABS_CUSTOM_LLM_SECRET` | Secret | ElevenLabs API key |
 
 ---
-*Built with ❤️ for the Nigerian hustle*
+*Built with ❤️*
