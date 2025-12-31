@@ -301,22 +301,31 @@ async def upload_profile_image(request: dict):
         print(f"Error uploading profile image: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Biometric Face Verification
+# Biometric Face Verification + Transfer Execution (Atomic Operation)
 class FaceVerificationRequest(BaseModel):
     image: str  # Base64 image from webcam
-    user_id: Optional[int] = None  # Optional, can extract from JWT instead
+    user_id: Optional[int] = None
+    session_id: Optional[str] = None  # For updating Gemini chat history
+    # Transfer details (required if verifying for a transfer)
+    amount: Optional[int] = None  # Amount in Naira
+    beneficiary_name: Optional[str] = None
+    account_number: Optional[str] = None
+    bank_name: Optional[str] = None
 
 @app.post("/verify-face")
 async def verify_face(request: FaceVerificationRequest):
     """
-    Compares live selfie with stored user profile image using DeepFace
+    Compares live selfie with stored user profile image using DeepFace.
+    If verified AND transfer details are provided, executes the transfer atomically.
+    Updates Gemini session with result so conversation can continue.
     """
     import sys
     import base64
     import tempfile
     import os
     from pathlib import Path
-    from tools import get_db_connection
+    from tools import get_db_connection, execute_transfer
+    from google.genai import types
     
     print(f"\n[FACE] --- DEEPFACE VERIFICATION START ---", file=sys.stderr)
     
@@ -324,6 +333,11 @@ async def verify_face(request: FaceVerificationRequest):
         # For demo: use user_id=1 if not provided
         user_id = request.user_id if request.user_id else 1
         print(f"[FACE] Verifying face for user_id: {user_id}", file=sys.stderr)
+        
+        # Check if this is a transfer verification
+        is_transfer = all([request.amount, request.beneficiary_name, request.account_number, request.bank_name])
+        if is_transfer:
+            print(f"[FACE] Transfer pending: ₦{request.amount} to {request.beneficiary_name}", file=sys.stderr)
         
         # Get user's stored profile image from database (BLOB)
         conn = get_db_connection()
@@ -382,13 +396,49 @@ async def verify_face(request: FaceVerificationRequest):
             
             print(f"[FACE] ✅ DeepFace result: verified={verified}, distance={distance:.4f}, threshold={threshold:.4f}", file=sys.stderr)
             
-            return {
+            # If verified and this is a transfer, execute it atomically
+            transfer_result = None
+            if verified and is_transfer:
+                print(f"[FACE] ✅ Identity confirmed. Executing transfer...", file=sys.stderr)
+                transfer_result = execute_transfer(
+                    amount=request.amount,
+                    beneficiary_name=request.beneficiary_name,
+                    bank_name=request.bank_name,
+                    account_number=request.account_number,
+                    user_id=user_id
+                )
+                print(f"[FACE] Transfer result: {transfer_result.get('status')}", file=sys.stderr)
+                
+                # Update Gemini session with transfer result so conversation can continue
+                if transfer_result.get('status') == 'success' and request.session_id:
+                    try:
+                        session_id = request.session_id
+                        chat_history = voice_agent.session_manager.get_or_create_session(session_id)
+                        
+                        # Add transfer success to chat history
+                        success_message = f"[SYSTEM: Transfer completed successfully. ₦{request.amount:,} sent to {request.beneficiary_name} at {request.bank_name}. New balance: {transfer_result.get('new_balance_ngn', 'N/A')}. You may now offer to save {request.beneficiary_name} as a beneficiary.]"
+                        chat_history.append(types.Content(
+                            role="user",
+                            parts=[types.Part(text=success_message)]
+                        ))
+                        voice_agent.session_manager.update_session(session_id, chat_history)
+                        print(f"[FACE] Updated Gemini session with transfer success", file=sys.stderr)
+                    except Exception as e:
+                        print(f"[FACE] Failed to update session: {e}", file=sys.stderr)
+            
+            response = {
                 "verified": verified,
                 "confidence": round(confidence, 2),
                 "reason": "Same person verified" if verified else "Different people detected",
                 "distance": round(distance, 4),
                 "threshold": round(threshold, 4)
             }
+            
+            # Include transfer result if applicable
+            if transfer_result:
+                response["transfer"] = transfer_result
+            
+            return response
             
         finally:
             # Clean up temporary files
@@ -408,40 +458,75 @@ async def verify_face(request: FaceVerificationRequest):
 from fastapi import Request
 
 @app.post("/v1/chat/completions")
-async def chat_completions(
-    request: Request,
-    authorization: str = Header(None),
-    x_user_id: Optional[int] = Header(None, alias="X-User-ID"),
-    x_session_id: Optional[str] = Header(None, alias="X-Session-ID")
-):
+async def chat_completions(request: Request):
+    """
+    ElevenLabs-compatible chat completions endpoint.
+    Accepts any headers - we parse them manually inside.
+    """
     import sys
     
-    # Log raw request body for debugging (read once, parse from string)
+    print(f"\n{'='*60}", file=sys.stderr)
+    print(f"[ELEVENLABS] INCOMING REQUEST", file=sys.stderr)
+    print(f"{'='*60}", file=sys.stderr)
+    
+    # Log headers
+    print(f"[HEADERS]", file=sys.stderr)
+    for key, value in request.headers.items():
+        if 'auth' in key.lower():
+            print(f"  {key}: {value[:20]}..." if len(str(value)) > 20 else f"  {key}: {value}", file=sys.stderr)
+        else:
+            print(f"  {key}: {value}", file=sys.stderr)
+    
+    # Log raw request body for debugging
     raw_body = await request.body()
     raw_body_str = raw_body.decode('utf-8')
-    print(f"\n[MAIN] ========== RAW REQUEST ==========\n{raw_body_str}\n==============================", file=sys.stderr)
+    print(f"\n[BODY] ({len(raw_body_str)} bytes):", file=sys.stderr)
+    print(raw_body_str[:2000] if len(raw_body_str) > 2000 else raw_body_str, file=sys.stderr)
+    print(f"{'='*60}\n", file=sys.stderr)
     sys.stderr.flush()
     
     # Parse the body manually from the raw string
     try:
-        body = json.loads(raw_body_str)
+        body = json.loads(raw_body_str) if raw_body_str else {}
         chat_request = ChatCompletionRequest(**body)
     except Exception as parse_error:
         print(f"[MAIN] ❌ Parse error: {parse_error}", file=sys.stderr)
+        print(f"[MAIN] Body was: {raw_body_str[:500]}", file=sys.stderr)
         raise HTTPException(status_code=422, detail=f"Failed to parse request: {parse_error}")
     
     print(f"[MAIN] Received /v1/chat/completions request", file=sys.stderr)
     
-    # 1. Validate API Key
+    # Get headers manually from request
+    authorization = request.headers.get("authorization")
+    x_user_id = request.headers.get("x-user-id")
+    x_session_id = request.headers.get("x-session-id")
+    
+    # 1. Validate API Key (only if Authorization header is provided)
     expected_key = os.getenv("ELEVENLABS_CUSTOM_LLM_SECRET")
     print(f"[MAIN] Validating API Key...", file=sys.stderr)
     
-    if expected_key and (not authorization or authorization.split(" ")[1] != expected_key):
-        print(f"[MAIN] ❌ Unauthorized: Key mismatched", file=sys.stderr)
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    # If Authorization header is provided, validate it
+    if authorization:
+        try:
+            provided_key = authorization.split(" ")[1] if " " in authorization else authorization
+            if expected_key and provided_key != expected_key:
+                print(f"[MAIN] ❌ Unauthorized: Key mismatched", file=sys.stderr)
+                raise HTTPException(status_code=401, detail="Unauthorized")
+        except Exception:
+            print(f"[MAIN] ❌ Unauthorized: Invalid auth header", file=sys.stderr)
+            raise HTTPException(status_code=401, detail="Unauthorized")
+    else:
+        print(f"[MAIN] No auth header - allowing for local/chat testing", file=sys.stderr)
 
-    # 2. Get user_id (default to 1 for testing if not provided)
-    user_id = x_user_id if x_user_id else 1
+    # 2. Get user_id - REQUIRED, no default fallback
+    user_id = None
+    if x_user_id and x_user_id.lower() != "none" and x_user_id.isdigit():
+        user_id = int(x_user_id)
+    
+    if not user_id:
+        print(f"[MAIN] ❌ Missing or invalid x-user-id: {x_user_id}", file=sys.stderr)
+        raise HTTPException(status_code=400, detail="x-user-id header required")
+    
     session_id = x_session_id  # Can be None, voice_agent will use user_id as session_id
     print(f"[MAIN] ✅ Authorized. User ID: {user_id}, Session ID: {session_id or 'default'}, Processing message: {chat_request.messages[-1].content}", file=sys.stderr)
 

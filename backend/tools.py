@@ -137,17 +137,55 @@ def execute_transfer(amount: int, beneficiary_name: str, bank_name: str, account
         print(f"[TRANSFER] Balance updated: {current_balance} → {new_balance} kobo", file=sys.stderr)
         
         # Step 4: Create transaction record
+        reference_code = f"REF_{transaction_id}"
         cursor.execute(
             """
             INSERT INTO transactions 
-            (transaction_id, user_id, type, amount_kobo, counterparty_name, counterparty_bank, counterparty_account, status, created_at)
-            VALUES (%s, %s, 'DEBIT', %s, %s, %s, %s, 'SUCCESS', NOW())
+            (transaction_id, user_id, account_id, type, amount_kobo, counterparty_name, counterparty_bank, counterparty_account, status, reference_code, created_at)
+            VALUES (%s, %s, %s, 'DEBIT', %s, %s, %s, %s, 'SUCCESS', %s, NOW())
             """,
-            (transaction_id, user_id, amount_kobo, beneficiary_name, bank_name, account_number)
+            (transaction_id, user_id, account_id, amount_kobo, beneficiary_name, bank_name, account_number, reference_code)
         )
         print(f"[TRANSFER] Transaction record created: {transaction_id}", file=sys.stderr)
         
-        # Step 5: Update beneficiary frequency (if exists)
+        # Step 5: Credit receiver if internal TunjiaX transfer
+        if bank_name and "tunjiax" in bank_name.lower():
+            # Find receiver's account by account number
+            cursor.execute(
+                """
+                SELECT account_id, balance_kobo, user_id FROM accounts 
+                WHERE account_number = %s AND is_active = TRUE
+                LIMIT 1
+                """,
+                (account_number,)
+            )
+            receiver_account = cursor.fetchone()
+            
+            if receiver_account:
+                receiver_account_id, receiver_balance, receiver_user_id = receiver_account
+                new_receiver_balance = receiver_balance + amount_kobo
+                
+                # Credit receiver
+                cursor.execute(
+                    """
+                    UPDATE accounts SET balance_kobo = %s WHERE account_id = %s
+                    """,
+                    (new_receiver_balance, receiver_account_id)
+                )
+                
+                # Create credit transaction for receiver
+                credit_transaction_id = f"TXN_{datetime.now().strftime('%Y%m%d%H%M%S')}_{str(uuid.uuid4())[:8].upper()}"
+                cursor.execute(
+                    """
+                    INSERT INTO transactions 
+                    (transaction_id, user_id, account_id, type, amount_kobo, counterparty_name, counterparty_bank, counterparty_account, status, reference_code, created_at)
+                    VALUES (%s, %s, %s, 'CREDIT', %s, %s, %s, %s, 'SUCCESS', %s, NOW())
+                    """,
+                    (credit_transaction_id, receiver_user_id, receiver_account_id, amount_kobo, "Internal Transfer", "TunjiaX", account_number, f"REF_{credit_transaction_id}")
+                )
+                print(f"[TRANSFER] ✅ Credited receiver account {account_number}: +₦{amount:,}", file=sys.stderr)
+        
+        # Step 6: Update beneficiary frequency (if exists)
         cursor.execute(
             """
             UPDATE beneficiaries 
@@ -185,6 +223,36 @@ def execute_transfer(amount: int, beneficiary_name: str, bank_name: str, account
         conn.close()
 
 
+def add_beneficiary(alias_name: str, account_name: str, account_number: str, bank_name: str, user_id: int = 1):
+    """
+    Adds a new beneficiary to the user's saved list
+    Gemini calls this after a successful transfer when user agrees to save
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("""
+            INSERT INTO beneficiaries (alias_name, account_name, account_number, bank_name, user_id, frequency_count)
+            VALUES (%s, %s, %s, %s, %s, 1)
+        """, (alias_name, account_name, account_number, bank_name, user_id))
+        
+        conn.commit()
+        
+        return {
+            "status": "success",
+            "message": f"Saved {alias_name} to your beneficiaries"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Could not save beneficiary: {str(e)}"
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # Tool definitions for Google Gen AI SDK
 from google.genai import types
 
@@ -193,7 +261,7 @@ tools_list = [
         function_declarations=[
             types.FunctionDeclaration(
                 name="lookup_beneficiary",
-                description="Searches for a beneficiary by their nickname/alias (e.g., 'Bisola'). Returns full banking details.",
+                description="Searches for a beneficiary by their nickname/alias (e.g., 'Bisola'). Returns full banking details if found, or NOT_FOUND if not in saved list.",
                 parameters={
                     "type": "OBJECT",
                     "properties": {
@@ -204,7 +272,7 @@ tools_list = [
             ),
             types.FunctionDeclaration(
                 name="trigger_biometric_auth",
-                description="Triggers the biometric security modal (face scan) on the frontend before executing a transfer.",
+                description="Triggers face verification on the frontend before executing a transfer. Call this AFTER user confirms the transfer details.",
                 parameters={
                     "type": "OBJECT",
                     "properties": {}
@@ -212,18 +280,33 @@ tools_list = [
             ),
             types.FunctionDeclaration(
                 name="execute_transfer",
-                description="Executes the final transfer after biometric approval. Only call this AFTER biometric verification.",
+                description="Executes the final transfer. Only call this AFTER biometric verification is complete.",
                 parameters={
                     "type": "OBJECT",
                     "properties": {
                         "amount": {"type": "INTEGER", "description": "Amount in Naira (will be converted to kobo internally)"},
                         "beneficiary_name": {"type": "STRING", "description": "Full name of recipient"},
-                        "bank_name": {"type": "STRING", "description": "Recipient's bank (e.g., GTBank, Opay)"},
+                        "bank_name": {"type": "STRING", "description": "Recipient's bank - must be TunjiaX"},
                         "account_number": {"type": "STRING", "description": "10-digit NUBAN account number"}
                     },
                     "required": ["amount", "beneficiary_name", "bank_name", "account_number"]
+                }
+            ),
+            types.FunctionDeclaration(
+                name="add_beneficiary",
+                description="Saves a new beneficiary to the user's list after a successful transfer. Ask user first if they want to save.",
+                parameters={
+                    "type": "OBJECT",
+                    "properties": {
+                        "alias_name": {"type": "STRING", "description": "Short nickname for the beneficiary (e.g., 'Tunde', 'Mama')"},
+                        "account_name": {"type": "STRING", "description": "Full account name"},
+                        "account_number": {"type": "STRING", "description": "10-digit account number"},
+                        "bank_name": {"type": "STRING", "description": "Bank name"}
+                    },
+                    "required": ["alias_name", "account_name", "account_number", "bank_name"]
                 }
             )
         ]
     )
 ]
+

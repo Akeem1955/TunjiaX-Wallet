@@ -3,11 +3,12 @@ import { useAuth } from '../../../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, LogOut, LayoutDashboard, Send, Users,
-    Menu, X, ChevronRight, Bell
+    Menu, X, ChevronRight, Bell, MessageCircle
 } from 'lucide-react';
 import BalanceWidget from './BalanceWidget';
 import TransactionHistory from './TransactionHistory';
 import VoiceWidget from './VoiceWidget';
+import ChatWidget from './ChatWidget';
 import BeneficiariesList from './BeneficiariesList';
 import BiometricModal from './BiometricModal';
 
@@ -20,12 +21,24 @@ export default function Dashboard() {
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+        { id: 'chat', label: 'Chat Banking', icon: <MessageCircle className="w-5 h-5" /> },
         { id: 'transactions', label: 'Transactions', icon: <Send className="w-5 h-5" /> },
         { id: 'beneficiaries', label: 'Beneficiaries', icon: <Users className="w-5 h-5" /> },
     ];
 
     const renderContent = () => {
         switch (activeTab) {
+            case 'chat':
+                return (
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                    >
+                        <h2 className="text-2xl font-bold text-slate-800 mb-6">Chat Banking</h2>
+                        <ChatWidget />
+                    </motion.div>
+                );
             case 'transactions':
                 return (
                     <motion.div
