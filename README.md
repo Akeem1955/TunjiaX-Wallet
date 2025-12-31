@@ -1,6 +1,15 @@
 # TunjiaX-Wallet: Voice Banking for Nigeria
 
-Voice-first banking assistant using **Gemini 2.0 Flash** + **ElevenLabs** + **DeepFace biometrics**.
+🎤 Voice-first banking assistant using **Gemini 2.0 Flash** + **ElevenLabs** + **DeepFace biometrics**.
+
+## Features
+- ✅ Voice Banking with ElevenLabs
+- ✅ Chat Banking with Gemini AI
+- ✅ Face Verification with DeepFace
+- ✅ Internal TunjiaX Transfers
+- ✅ Beneficiary Management
+- ✅ Google OAuth Authentication
+
 
 ## Quick Start (Local Development)
 
