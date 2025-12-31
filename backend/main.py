@@ -509,11 +509,17 @@ async def chat_completions(request: Request):
     if authorization:
         try:
             provided_key = authorization.split(" ")[1] if " " in authorization else authorization
+            # Debug: show first/last 4 chars for comparison
+            print(f"[MAIN] Expected key: {expected_key[:4] if expected_key else 'NONE'}...{expected_key[-4:] if expected_key else ''} (len={len(expected_key) if expected_key else 0})", file=sys.stderr)
+            print(f"[MAIN] Provided key: {provided_key[:4] if provided_key else 'NONE'}...{provided_key[-4:] if provided_key else ''} (len={len(provided_key) if provided_key else 0})", file=sys.stderr)
             if expected_key and provided_key != expected_key:
                 print(f"[MAIN] ❌ Unauthorized: Key mismatched", file=sys.stderr)
                 raise HTTPException(status_code=401, detail="Unauthorized")
-        except Exception:
-            print(f"[MAIN] ❌ Unauthorized: Invalid auth header", file=sys.stderr)
+            print(f"[MAIN] ✅ Key matched!", file=sys.stderr)
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"[MAIN] ❌ Unauthorized: Invalid auth header - {e}", file=sys.stderr)
             raise HTTPException(status_code=401, detail="Unauthorized")
     else:
         print(f"[MAIN] No auth header - allowing for local/chat testing", file=sys.stderr)
