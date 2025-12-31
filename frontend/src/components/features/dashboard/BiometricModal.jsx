@@ -73,11 +73,11 @@ export default function BiometricModal({ onClose, onSuccess, onFailure }) {
                     initial={{ scale: 0.95, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.95, opacity: 0 }}
-                    className="bg-white rounded-3xl shadow-strong max-w-md w-full overflow-hidden"
+                    className="bg-white rounded-2xl sm:rounded-3xl shadow-strong w-full max-w-[90vw] sm:max-w-md overflow-hidden"
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="flex items-center justify-between p-6 border-b border-surface-200">
+                    <div className="flex items-center justify-between p-4 sm:p-6 border-b border-surface-200">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
                                 <Shield className="w-5 h-5 text-brand-600" />
@@ -96,7 +96,7 @@ export default function BiometricModal({ onClose, onSuccess, onFailure }) {
                     </div>
 
                     {/* Content */}
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         {/* Webcam / Status Display */}
                         <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-100 mb-6">
                             {status === 'success' ? (
@@ -152,7 +152,7 @@ export default function BiometricModal({ onClose, onSuccess, onFailure }) {
                                                 } : {}}
                                                 transition={{ duration: 1, repeat: Infinity }}
                                                 className={`
-                                                    w-40 h-52 border-4 rounded-[3rem]
+                                                    w-28 h-36 sm:w-40 sm:h-52 border-4 rounded-[2rem] sm:rounded-[3rem]
                                                     ${status === 'verifying' ? 'border-brand-400' : 'border-white/80'}
                                                 `}
                                             />
@@ -211,7 +211,7 @@ export default function BiometricModal({ onClose, onSuccess, onFailure }) {
                     </div>
 
                     {/* Footer */}
-                    <div className="px-6 pb-6">
+                    <div className="px-4 pb-4 sm:px-6 sm:pb-6">
                         <p className="text-xs text-slate-400 text-center flex items-center justify-center gap-1">
                             <Shield className="w-3 h-3" />
                             Biometric data is processed securely

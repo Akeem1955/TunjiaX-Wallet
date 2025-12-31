@@ -217,7 +217,7 @@ export default function ChatWidget() {
     }, [showBiometricModal]);
 
     return (
-        <Card variant="elevated" padding="none" className="flex flex-col h-[500px]">
+        <Card variant="elevated" padding="none" className="flex flex-col h-[calc(100vh-200px)] min-h-[400px] max-h-[600px] lg:h-[500px]">
             {/* Header */}
             <div className="p-4 border-b border-surface-200 flex items-center gap-3">
                 <div className="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
@@ -320,7 +320,7 @@ export default function ChatWidget() {
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full max-w-[90vw] sm:max-w-sm shadow-2xl"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">

@@ -27,6 +27,7 @@ html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
 }
 
 body {
@@ -34,6 +35,32 @@ body {
     background-color: var(--color-surface-secondary);
     color: var(--color-text-primary);
     line-height: 1.6;
+    overflow-x: hidden;
+    min-height: 100vh;
+    min-height: 100dvh;
+    /* Dynamic viewport height for mobile */
+}
+
+/* Prevent horizontal overflow on all containers */
+#root {
+    overflow-x: hidden;
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+/* Mobile-first text sizing */
+@media (max-width: 640px) {
+    html {
+        font-size: 14px;
+    }
+
+    h1 {
+        font-size: 1.75rem !important;
+    }
+
+    h2 {
+        font-size: 1.5rem !important;
+    }
 }
 
 /* Focus styles for accessibility */

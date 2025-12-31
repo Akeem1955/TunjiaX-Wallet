@@ -283,8 +283,8 @@ export default function VoiceWidget() {
 
                 {/* Quick tips */}
                 <div className="mt-6 pt-6 border-t border-surface-200">
-                    <p className="text-xs text-slate-500 text-center">
-                        💳 Send to: Akeem (0321230165) • Tunde (0987654321) • Aminat (1234567890)
+                    <p className="text-xs text-slate-500 text-center leading-relaxed">
+                        💳 Send to: Akeem • Tunde • Aminat
                     </p>
                 </div>
             </div>
@@ -305,7 +305,7 @@ export default function VoiceWidget() {
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
-                            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+                            className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 w-full max-w-[90vw] sm:max-w-sm shadow-2xl"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3">
