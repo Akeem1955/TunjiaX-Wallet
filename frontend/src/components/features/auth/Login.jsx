@@ -172,20 +172,16 @@ export default function Login() {
                         </div>
                     </Card>
 
-                    {/* Trust badges */}
+                    {/* Secure badge */}
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.4 }}
-                        className="mt-8 flex items-center justify-center gap-6 text-slate-400"
+                        className="mt-8 flex items-center justify-center text-slate-400"
                     >
                         <div className="flex items-center gap-2 text-sm">
                             <Shield className="w-4 h-4" />
-                            <span>256-bit SSL</span>
-                        </div>
-                        <div className="w-1 h-1 bg-slate-300 rounded-full" />
-                        <div className="flex items-center gap-2 text-sm">
-                            <span>NDIC Insured</span>
+                            <span>Secure Banking</span>
                         </div>
                     </motion.div>
                 </motion.div>
