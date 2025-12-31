@@ -99,7 +99,7 @@ export default function Login() {
             </div>
 
             {/* Right Panel - Login Form */}
-            <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-white lg:rounded-l-[3rem] lg:shadow-strong relative">
+            <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-white relative">
                 <motion.div
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -115,7 +115,7 @@ export default function Login() {
                         <p className="text-slate-500 mt-1">Voice Banking</p>
                     </div>
 
-                    <Card variant="elevated" padding="lg" className="relative overflow-hidden">
+                    <div className="w-full max-w-md bg-white/80 backdrop-blur-sm rounded-3xl p-8 shadow-soft">
                         {/* Card accent line */}
                         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-400 via-brand-600 to-brand-400" />
 
@@ -170,7 +170,7 @@ export default function Login() {
                                 </span>
                             </p>
                         </div>
-                    </Card>
+                    </div>
 
                     {/* Secure badge */}
                     <motion.div
