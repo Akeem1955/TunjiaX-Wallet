@@ -524,14 +524,19 @@ async def chat_completions(request: Request):
     else:
         print(f"[MAIN] No auth header - allowing for local/chat testing", file=sys.stderr)
 
-    # 2. Get user_id - REQUIRED, no default fallback
+    # 2. Get user_id - with fallback for ElevenLabs voice
     user_id = None
     if x_user_id and x_user_id.lower() != "none" and x_user_id.isdigit():
         user_id = int(x_user_id)
     
+    # If no user_id but API key is valid (ElevenLabs voice), use default user_id=1
     if not user_id:
-        print(f"[MAIN] ❌ Missing or invalid x-user-id: {x_user_id}", file=sys.stderr)
-        raise HTTPException(status_code=400, detail="x-user-id header required")
+        if authorization:
+            user_id = 1  # Default for ElevenLabs voice calls
+            print(f"[MAIN] ⚠️ Using default user_id=1 for ElevenLabs voice", file=sys.stderr)
+        else:
+            print(f"[MAIN] ❌ Missing or invalid x-user-id: {x_user_id}", file=sys.stderr)
+            raise HTTPException(status_code=400, detail="x-user-id header required")
     
     session_id = x_session_id  # Can be None, voice_agent will use user_id as session_id
     print(f"[MAIN] ✅ Authorized. User ID: {user_id}, Session ID: {session_id or 'default'}, Processing message: {chat_request.messages[-1].content}", file=sys.stderr)
